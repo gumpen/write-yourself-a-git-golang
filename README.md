@@ -1,0 +1,1 @@
+Go language implementation of https://github.com/thblt/write-yourself-a-git

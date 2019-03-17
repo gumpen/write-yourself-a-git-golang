@@ -8,6 +8,8 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+// cli.Command interfaceをサブコマンドごとに実装する必要がある
+// それらをc.Commandsに登録してc.Run()
 func main() {
 	c := cli.NewCLI("app", "1.0.0")
 	c.Args = os.Args[1:]

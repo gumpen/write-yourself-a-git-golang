@@ -1,6 +1,8 @@
 package wyag
 
-import "log"
+import (
+	"log"
+)
 
 type AddCommand struct{}
 

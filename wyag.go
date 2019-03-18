@@ -2,34 +2,31 @@ package wyag
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	pathpkg "path"
 
 	"github.com/go-ini/ini"
 )
 
+// GitRepository is the struct of git repository
 type GitRepository struct {
 	workTree string
 	gitdir   string
 	config   *ini.File
 }
 
+// NewGitRepository is constructor of GitRepository struct
 func NewGitRepository(path string, force bool) (*GitRepository, error) {
 	gr := new(GitRepository)
 
 	gr.workTree = path
 	gr.gitdir = pathpkg.Join(path, ".git")
 
-	gd, err := os.Lstat(gr.gitdir)
-	if err != nil {
-		return nil, err
-	}
-
-	if !force && !gd.IsDir() {
+	if !force && !IsDir(gr.gitdir) {
 		return nil, fmt.Errorf("Not a Git repository %s", path)
 	}
 
-	// cfg, err := ini.Load("config")
 	cfPath, err := repoFile(gr, "config", false)
 	if err != nil {
 		return nil, err
@@ -80,7 +77,7 @@ func repoDir(gr *GitRepository, path string, mkDir bool) (string, error) {
 	}
 
 	if mkDir {
-		err := os.Mkdir(p, 0777)
+		err := os.MkdirAll(p, 0777)
 		if err != nil {
 			return "", err
 		}
@@ -90,11 +87,103 @@ func repoDir(gr *GitRepository, path string, mkDir bool) (string, error) {
 	}
 }
 
+func (gr *GitRepository) repoDefaultConfig(path string) error {
+	_, err := gr.config.NewSection("core")
+	if err != nil {
+		return err
+	}
+	gr.config.Section("core").Key("repositoryformatversion").SetValue("0")
+	gr.config.Section("core").Key("filemode").SetValue("false")
+	gr.config.Section("core").Key("bare").SetValue("false")
+
+	gr.config.SaveTo(path)
+
+	return nil
+}
+
+// Create a new repository at path.
+func repoCreate(path string) (*GitRepository, error) {
+	gr, err := NewGitRepository(path, true)
+	if err != nil {
+		return nil, err
+	}
+
+	if Exists(gr.workTree) {
+		if !IsDir(gr.workTree) {
+			return nil, fmt.Errorf("%s is not a directory", path)
+		}
+
+		list, err := ioutil.ReadDir(gr.workTree)
+		if err != nil {
+			return nil, err
+		}
+		if len(list) != 0 {
+			return nil, fmt.Errorf("%s is not empty", path)
+		}
+	} else {
+		if err = os.Mkdir(gr.workTree, 0777); err != nil {
+			return nil, err
+		}
+	}
+
+	repoDir(gr, "branches", true)
+	repoDir(gr, "objects", true)
+	repoDir(gr, "refs/tags", true)
+	repoDir(gr, "refs/heads", true)
+
+	descriptionPath, err := repoFile(gr, "description", false)
+	if err != nil {
+		return nil, err
+	}
+	descriptionFile, err := os.Create(descriptionPath)
+	if err != nil {
+		return nil, err
+	}
+	defer descriptionFile.Close()
+	descriptionFile.WriteString("Unnamed repository; edit this file 'description' to name the repository.\n")
+
+	headPath, err := repoFile(gr, "HEAD", false)
+	if err != nil {
+		return nil, err
+	}
+	headFile, err := os.Create(headPath)
+	if err != nil {
+		return nil, err
+	}
+	defer headFile.Close()
+	headFile.WriteString("ref: refs/heads/master\n")
+
+	configPath, err := repoFile(gr, "config", false)
+	if err != nil {
+		return nil, err
+	}
+	configFile, err := os.Create(configPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := configFile.Close(); err != nil {
+		return nil, err
+	}
+
+	gr.config, err = ini.Load(configPath)
+	if err != nil {
+		return nil, err
+	}
+	err = gr.repoDefaultConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return gr, nil
+}
+
+// Exists check
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// IsDir check
 func IsDir(path string) bool {
 	f, err := os.Stat(path)
 	if err != nil || !f.IsDir() {

@@ -177,6 +177,39 @@ func repoCreate(path string) (*GitRepository, error) {
 	return gr, nil
 }
 
+func repoFind(path string, required bool) (*GitRepository, error) {
+	if path == "" {
+		path = "."
+	}
+
+	path, err := RealPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if IsDir(pathpkg.Join(path, ".git")) {
+		gr, err := NewGitRepository(path, false)
+		if err != nil {
+			return nil, err
+		}
+		return gr, nil
+	}
+
+	parent, err := RealPath(pathpkg.Join(path, ".."))
+	if err != nil {
+		return nil, err
+	}
+
+	if parent == path {
+		if required {
+			return nil, fmt.Errorf("No git directory")
+		}
+		return nil, nil
+	}
+
+	return repoFind(parent, required)
+}
+
 // Exists check
 func Exists(path string) bool {
 	_, err := os.Stat(path)
@@ -190,4 +223,19 @@ func IsDir(path string) bool {
 		return false
 	}
 	return true
+}
+
+func RealPath(path string) (string, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if fi.Mode() == os.ModeSymlink {
+		originFilePath, err := os.Readlink(fi.Name())
+		if err != nil {
+			return "", err
+		}
+		return originFilePath, nil
+	}
+	return path, nil
 }

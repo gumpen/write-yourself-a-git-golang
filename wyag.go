@@ -16,6 +16,10 @@ type GitRepository struct {
 	config   *ini.File
 }
 
+type GitObject struct {
+	repository string
+}
+
 // NewGitRepository is constructor of GitRepository struct
 func NewGitRepository(path string, force bool) (*GitRepository, error) {
 	gr := new(GitRepository)
@@ -50,6 +54,29 @@ func NewGitRepository(path string, force bool) (*GitRepository, error) {
 	}
 
 	return gr, nil
+}
+
+// NewGitObject is constructor of GitObject struct
+func NewGitObject(repository string, data string) (*GitObject, error) {
+	gob := new(GitObject)
+	gob.repository = repository
+
+	if data != "" {
+		err := gob.deserialize(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return gob, nil
+}
+
+func (gob *GitObject) serialize(data string) error {
+	return fmt.Errorf("Unimplemented")
+}
+
+func (gob *GitObject) deserialize(data string) error {
+	return fmt.Errorf("Unimplemented")
 }
 
 // Compute path under repo's gitdir.

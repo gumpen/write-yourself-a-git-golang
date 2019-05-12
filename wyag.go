@@ -1,10 +1,13 @@
 package wyag
 
 import (
+	"bytes"
+	"compress/zlib"
 	"fmt"
 	"io/ioutil"
 	"os"
 	pathpkg "path"
+	"strconv"
 
 	"github.com/go-ini/ini"
 )
@@ -235,6 +238,65 @@ func repoFind(path string, required bool) (*GitRepository, error) {
 	}
 
 	return repoFind(parent, required)
+}
+
+func objectRead(repository *GitRepository, sha string) (interface{}, error) {
+
+	path, err := repoFile(repository, pathpkg.Join("objects", sha[0:2], sha[2:]), false)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
+	defer f.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	in := bytes.NewBuffer(b)
+	r, err := zlib.NewReader(in)
+	defer r.Close()
+	if err != nil {
+		return nil, err
+	}
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r)
+	raw := buf.Bytes()
+	r.Close()
+
+	x := bytes.Index(raw, []byte(" "))
+	fmtType := string(raw[0:x])
+	rest := raw[x:]
+	y := bytes.Index(rest, []byte("\x00"))
+	size, err := strconv.Atoi(string(raw[x:y]))
+	if err != nil {
+		return nil, err
+	}
+	if size != len(raw)-y-1 {
+		return nil, fmt.Errorf("Malformed object %s: bad length", sha)
+	}
+
+	var c interface{}
+	if fmtType == "commit" {
+		c = NewGitCommit(repo, raw[y+1:])
+	} else if fmtType == "tree" {
+		c = NewGitTree(repo, raw[y+1:])
+	} else if fmtType == "tag" {
+		c = NewGitTag(repo, raw[y+1:])
+	} else if fmtType == "blob" {
+		c = NewGitBlog(repo, raw[y+1:])
+	} else {
+		return nil, fmt.Errorf("Unknown type %s for object %s", fmtType, sha)
+	}
+
+	return c, nil
+}
+
+func objectFind(repo *GitRepository, name, fmt string, follow bool) string {
+	return name
 }
 
 // Exists check
